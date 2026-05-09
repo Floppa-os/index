@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Пять ночей в доме</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #111;
+            color: #fff;
+            text-align: center;
+        }
+        .game-container {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .status {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+        .rooms {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .room {
+            padding: 15px;
+            background-color: #333;
+            border: 2px solid #555;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .room:hover {
+            background-color: #444;
+        }
+        .room.active {
+            background-color: #5a3;
+            border-color: #7c5;
+        }
+        .current-room {
+            min-height: 200px;
+            background-color: #222;
+            border: 2px solid #444;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .toy {
+            width: 100px;
+            height: 100px;
+            background-color: #f66;
+            border-radius: 50%;
+            position: absolute;
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: #444;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Пять ночей в доме</h1>
+        <div class="status">
+            Ночь: <span id="night">1</span> | Время: <span id="time">12:00</span> | Энергия: <span id="energy">100%</span>
+        </div>
+
+        <div class="rooms">
+            <div class="room" data-room="hall">Прихожая</div>
+            <div class="room" data-room="service">Служебная</div>
+            <div class="room" data-room="kitchen">Кухня</div>
+            <div class="room" data-room="bedroom1">Спальня 1</div>
+            <div class="room" data-room="bedroom2">Спальня 2</div>
+            <div class="room" data-room="bedroom3">Спальня 3</div>
+            <div class="room" data-room="bathroom">Ванная комната</div>
+        </div>
+
+        <div class="current-room" id="currentRoom">
+            Выберите комнату, чтобы начать наблюдение
+        </div>
+
+        <div class="controls">
+            <button id="checkCams">Проверить камеры</button>
+            <button id="closeDoor">Закрыть дверь</button>
+            <button id="useFlashlight">Включить фонарик</button>
+        </div>
+    </div>
+
+    <script>
+        // Игровые переменные
+        let currentNight = 1;
+        let currentTime = 0; // в минутах (0–480 = 12:00–6:00)
+        let energy = 100;
+        let currentRoom = null;
+        let toysInRoom = 0;
+
+        // Элементы DOM
+        const nightEl = document.getElementById('night');
+        const timeEl = document.getElementById('time');
+        const energyEl = document.getElementById('energy');
+        const currentRoomEl = document.getElementById('currentRoom');
+        const rooms = document.querySelectorAll('.room');
+        const checkCamsBtn = document.getElementById('checkCams');
+        const closeDoorBtn = document.getElementById('closeDoor');
+        const useFlashlightBtn = document.getElementById('useFlashlight');
+
+        // Инициализация игры
+        function initGame() {
+            updateDisplay();
+            setupEventListeners();
+            startGameLoop();
+        }
+
+        // Обновление отображения
+        function updateDisplay() {
+            nightEl.textContent = currentNight;
+            timeEl.textContent = formatTime(currentTime);
+            energyEl.textContent = `${energy}%`;
+        }
+
+        // Форматирование времени (минуты → ЧЧ:ММ)
+        function formatTime(minutes) {
+            const hours = Math.floor(minutes / 60) + 12;
+            const mins = minutes % 60;
+            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+        }
+
+        // Настройка обработчиков событий
+        function setupEventListeners() {
+            rooms.forEach(room => {
+                room.addEventListener('click', () => {
+                    currentRoom = room.getAttribute('data-room');
+                    showRoom(currentRoom);
+                });
+            });
+
+            checkCamsBtn.addEventListener('click', checkCameras);
+            closeDoorBtn.addEventListener('click', closeDoor);
+            useFlashlightBtn.addEventListener('click', useFlashlight);
+        }
+
+        // Показать комнату
+        function showRoom(roomName) {
+            rooms.forEach(r => r.classList.remove('active'));
+            document.querySelector(`.room[data-room="${roomName}"]`).classList.add('active');
+
+            currentRoomEl.innerHTML = `<h2>${getRoomTitle(roomName)}</h2>`;
+
+            // Добавляем плюшевые игрушки (случайное количество)
+            toysInRoom = Math.floor(Math.random() * 3);
+            for (let i = 0; i < toysInRoom; i++) {
+                const toy = document.createElement('div');
+                toy.className = 'toy';
+                toy.style.left = `${Math.random() * 80 + 10}%`;
+                toy.style.top = `${Math.random() * 80 + 10}%`;
+                currentRoomEl.appendChild(toy);
+            }
+        }
+
+        // Получить название комнаты
+        function getRoomTitle(roomKey) {
+            const titles = {
+                'hall': 'Прихожая',
+                'service': 'Служебная',
+                'kitchen': 'Кухня',
+                'bedroom1': 'Спальня 1',
+                'bedroom2': 'Спальня 2',
+                'bedroom3': 'Спальня 3',
+                'bathroom': 'Ванная комната'
+            };
+            return titles[roomKey];
+        }
+
+        // Проверка камер
+        function checkCameras() {
+            if (energy >= 5) {
+                energy -= 5;
+                alert(`Камеры показывают: в ${getRoomTitle(currentRoom)} ${toysInRoom} плюшевых игрушек.`);
+                updateDisplay();
+            } else {
+                alert('Недостаточно энергии!');
+            }
+        }
+
+        // Закрыть дверь
+        function closeDoor() {
+            if (energy >= 10) {
+                energy -= 10;
+                alert('Дверь закрыта. Это замедлит продвижение игрушек.');
+                updateDisplay();
+            } else {
+                alert('Недостаточно энергии!');
+            }
+        }
+
+        // Включить фонарик
+        function useFlashlight() {
+            if (energy >= 3) {
+                energy -= 3;
+                alert('Фонарик включён. Вы лучше видите игрушки.');
+                updateDisplay();
+            } else {
+                alert('Недостаточно энергии!');
+            }
+        }
+
+        // Игровой цикл
+        function startGameLoop() {
+            setInterval(() => {
+                // Время идёт
+                currentTime++;
+                if
