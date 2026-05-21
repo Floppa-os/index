@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Крестики-нолики</title>
+</head>
+<body>
+    <h1 align="center">Крестики-нолики</h1>
+    <table align="center" border="1" width="300" height="300">
+        <tr>
+            <td id="cell_0_0" onclick="makeMove(0, 0)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_0_1" onclick="makeMove(0, 1)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_0_2" onclick="makeMove(0, 2)" align="center" valign="center" width="100" height="100"></td>
+        </tr>
+        <tr>
+            <td id="cell_1_0" onclick="makeMove(1, 0)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_1_1" onclick="makeMove(1, 1)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_1_2" onclick="makeMove(1, 2)" align="center" valign="center" width="100" height="100"></td>
+        </tr>
+        <tr>
+            <td id="cell_2_0" onclick="makeMove(2, 0)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_2_1" onclick="makeMove(2, 1)" align="center" valign="center" width="100" height="100"></td>
+            <td id="cell_2_2" onclick="makeMove(2, 2)" align="center" valign="center" width="100" height="100"></td>
+        </tr>
+    </table>
+    <p align="center" id="status">Ход: X</p>
+    <button align="center" onclick="resetGame()">Новая игра</button>
+
+    <script>
+        let currentPlayer = 'X';
+        let gameBoard = [
+            ['', '', ''],
+            ['', '', ''],
+            ['', '', '']
+        ];
+        let gameOver = false;
+
+        function makeMove(row, col) {
+            if (gameOver || gameBoard[row][col] !== '') {
+                return;
+            }
+
+            gameBoard[row][col] = currentPlayer;
+            document.getElementById(`cell_${row}_${col}`).textContent = currentPlayer;
+
+            if (checkWin()) {
+                document.getElementById('status').textContent = `Победил: ${currentPlayer}!`;
+                gameOver = true;
+                return;
+            }
+
+            if (isBoardFull()) {
+                document.getElementById('status').textContent = 'Ничья!';
+                gameOver = true;
+                return;
+            }
+
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+            document.getElementById('status').textContent = `Ход: ${currentPlayer}`;
+        }
+
+        function checkWin() {
+            // Проверка строк
+            for (let i = 0; i < 3; i++) {
+                if (gameBoard[i][0] === currentPlayer && gameBoard[i][1] === currentPlayer && gameBoard[i][2] === currentPlayer) {
+                    return true;
+                }
+            }
+            // Проверка столбцов
+            for (let j = 0; j < 3; j++) {
+                if (gameBoard[0][j] === currentPlayer && gameBoard[1][j] === currentPlayer && gameBoard[2][j] === currentPlayer) {
+                    return true;
+                }
+            }
+            // Проверка диагоналей
+            if (gameBoard[0][0] === currentPlayer && gameBoard[1][1] === currentPlayer && gameBoard[2][2] === currentPlayer) {
+                return true;
+            }
+            if (gameBoard[0][2] === currentPlayer && gameBoard[1][1] === currentPlayer && gameBoard[2][0] === currentPlayer) {
+                return true;
+            }
+            return false;
+        }
+
+        function isBoardFull() {
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    if (gameBoard[i][j] === '') {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function resetGame() {
+            currentPlayer = 'X';
+            gameOver = false;
+            gameBoard = [
+                ['', '', ''],
+                ['', '', ''],
+                ['', '', '']
+            ];
+            document.getElementById('status').textContent = 'Ход: X';
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 3; j++) {
+                    document.getElementById(`cell_${i}_${j}`).textContent = '';
+                }
+            }
+        }
+    </script>
+</body>
+</html>
