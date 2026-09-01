@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>МетроСтрой РФ — построй метро в любом городе России</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/russo-one@5/index.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/@fontsource/manrope@5/index.css" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#0b0e14;
+    --panel:#10141d;
+    --panel2:#151b27;
+    --line:#242d40;
+    --txt:#e9edf5;
+    --mut:#8d96ab;
+    --accent:#e4002b;
+    --accent2:#ffd800;
+    --radius:12px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:'Manrope',system-ui,sans-serif;
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+  }
+  .display{font-family:'Russo One',sans-serif}
+
+  /* ---------- layout ---------- */
+  #app{display:flex;height:100vh;width:100vw}
+  #sidebar{
+    width:330px;min-width:330px;height:100%;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    z-index:1100;
+    transition:transform .3s ease;
+  }
+  #mapWrap{flex:1;position:relative;min-width:0}
+  #map{width:100%;height:100%;background:#0a0d12}
+  #map.build-cursor{cursor:crosshair}
+
+  /* ---------- sidebar ---------- */
+  .sb-head{
+    padding:16px 18px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;
+    background:linear-gradient(180deg,#131927 0%,var(--panel) 100%);
+  }
+  .logo{
+    width:44px;height:44px;border-radius:12px;
+    background:radial-gradient(circle at 30% 25%, #ff4d5e, var(--accent) 60%, #8f0018);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Russo One';font-size:24px;color:#fff;
+    box-shadow:0 4px 14px rgba(228,0,43,.45), inset 0 1px 0 rgba(255,255,255,.25);
+    flex-shrink:0;
+  }
+  .sb-head h1{font-size:19px;letter-spacing:.5px;line-height:1.1}
+  .sb-head p{font-size:11px;color:var(--mut);margin-top:3px;font-weight:500}
+
+  .sb-scroll{flex:1;overflow-y:auto;padding:14px 16px 20px}
+  .sb-scroll::-webkit-scrollbar{width:8px}
+  .sb-scroll::-webkit-scrollbar-thumb{background:#2b3448;border-radius:4px}
+  .sb-scroll::-webkit-scrollbar-track{background:transparent}
+
+  .section{margin-bottom:20px}
+  .sec-title{
+    font-size:11px;text-transform:uppercase;letter-spacing:1.6px;
+    color:var(--mut);font-weight:700;margin-bottom:9px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+
+  /* tools */
+  .tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tool-btn{
+    display:flex;align-items:center;gap:9px;
+    padding:10px 11px;border-radius:10px;
+    background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);cursor:pointer;font-family:inherit;font-size:12.5px;font-weight:600;
+    transition:all .18s ease;
+  }
+  .tool-btn svg{width:17px;height:17px;flex-shrink:0}
+  .tool-btn:hover{border-color:#3a4560;transform:translateY(-1px)}
+  .tool-btn.active{
+    background:rgba(228,0,43,.14);
+    border-color:var(--accent);
+    color:#ffd7dc;
+    box-shadow:0 0 0 3px rgba(228,0,43,.12);
+  }
+  .tool-btn.active svg{stroke:#ff5c72}
+
+  /* lines */
+  #linesList{display:flex;flex-direction:column;gap:8px}
+  .line-row{
+    display:flex;align-items:center;gap:9px;
+    background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:9px 10px;cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .line-row:hover{border-color:#3a4560}
+  .line-row.active{border-color:var(--accent);background:rgba(228,0,43,.09)}
+  .line-dot{
+    width:22px;height:22px;border-radius:50%;flex-shrink:0;
+    border:2px solid rgba(255,255,255,.75);
+    box-shadow:0 0 8px currentColor;
+    cursor:pointer;transition:transform .15s;
+  }
+  .line-dot:hover{transform:scale(1.18)}
+  .line-info{flex:1;min-width:0}
+  .line-name{
+    width:100%;background:transparent;border:none;outline:none;
+    color:var(--txt);font-family:inherit;font-size:13px;font-weight:700;
+    padding:0;
+  }
+  .line-name:focus{border-bottom:1px dashed #4a5570}
+  .line-meta{font-size:10.5px;color:var(--mut);margin-top:2px}
+  .mini-btn{
+    width:26px;height:26px;border-radius:7px;border:none;flex-shrink:0;
+    background:transparent;color:var(--mut);cursor:pointer;font-size:13px;
+    display:flex;align-items:center;justify-content:center;transition:all .15s;
+  }
+  .mini-btn:hover{background:#232c40;color:var(--txt)}
+  .mini-btn.danger:hover{background:rgba(228,0,43,.2);color:#ff8093}
+
+  .add-line{
+    width:100%;margin-top:9px;padding:10px;border-radius:10px;
+    border:1px dashed #3a4560;background:transparent;color:var(--mut);
+    font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;
+    transition:all .18s;
+  }
+  .add-line:hover{border-color:var(--accent);color:#ff8093;background:rgba(228,0,43,.06)}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .stat{
+    background:var(--panel2);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;
+  }
+  .stat b{font-family:'Russo One';font-size:19px;display:block;line-height:1.15}
+  .stat span{font-size:10.5px;color:var(--mut);font-weight:600}
+  .stat:nth-child(1) b{color:#ff5c72}
+  .stat:nth-child(2) b{color:#4ecb71}
+  .stat:nth-child(3) b{color:#41b0ff}
+  .stat:nth-child(4) b{color:var(--accent2)}
+
+  /* cities */
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    padding:6px 11px;border-radius:20px;font-size:11.5px;font-weight:600;
+    background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    cursor:pointer;font-family:inherit;transition:all .15s;
+  }
+  .chip:hover{border-color:#41b0ff;color:#9fd6ff;transform:translateY(-1px)}
+
+  /* inputs row */
+  .pop-row{display:flex;gap:6px}
+  .pop-row input{
+    flex:1;background:#0d1119;border:1px solid #2c3549;border-radius:8px;
+    color:var(--txt);padding:8px 10px;font-family:inherit;font-size:12.5px;outline:none;
+    min-width:0;
+  }
+  .pop-row input:focus{border-color:#41b0ff}
+
+  /* labels toggle */
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;
+    background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 12px;font-size:12.5px;font-weight:600}
+  .switch{position:relative;width:38px;height:21px;flex-shrink:0}
+  .switch input{opacity:0;width:0;height:0}
+  .slider{position:absolute;inset:0;background:#2b3448;border-radius:20px;cursor:pointer;transition:.2s}
+  .slider:before{content:'';position:absolute;width:15px;height:15px;left:3px;top:3px;
+    background:#8d96ab;border-radius:50%;transition:.2s}
+  .switch input:checked + .slider{background:var(--accent)}
+  .switch input:checked + .slider:before{transform:translateX(17px);background:#fff}
+
+  /* actions / save */
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .act-btn{
+    padding:10px 6px;border-radius:10px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--txt);font-family:inherit;
+    font-size:12px;font-weight:700;cursor:pointer;transition:all .18s;
+    white-space:nowrap;
+  }
+  .act-btn:hover{transform:translateY(-1px)}
+  .act-btn.save:hover{border-color:#4ecb71;color:#8fe3a8}
+  .act-btn.link:hover{border-color:#41b0ff;color:#9fd6ff}
+  .act-btn.export:hover{border-color:var(--accent2);color:#ffe97a}
+  .act-btn.import:hover{border-color:#9b4f9b;color:#d3a1e8}
+  .act-btn.demo:hover{border-color:var(--accent2);color:#ffe97a}
+  .act-btn.clear:hover{border-color:var(--accent);color:#ff8093}
+  #saveStatus{
+    margin-top:8px;font-size:10.5px;color:#5fae77;font-weight:600;
+    display:flex;align-items:center;gap:5px;
+  }
+
+  /* ---------- map overlays ---------- */
+  #hint{
+    position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+    background:rgba(13,17,25,.92);border:1px solid var(--line);
+    border-radius:30px;padding:9px 20px;font-size:12.5px;font-weight:600;
+    color:#cdd5e4;z-index:1000;white-space:nowrap;max-width:92%;
+    overflow:hidden;text-overflow:ellipsis;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);
+    backdrop-filter:blur(6px);
+    animation:fadeUp .4s ease;
+  }
+  @keyframes fadeUp{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+
+  #toasts{position:absolute;top:16px;left:50%;transform:translateX(-50%);
+    z-index:1200;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .toast{
+    background:rgba(16,20,29,.95);border:1px solid var(--line);
+    border-left:3px solid var(--accent2);
+    padding:9px 18px;border-radius:10px;font-size:12.5px;font-weight:600;
+    box-shadow:0 8px 24px rgba(0,0,0,.5);animation:toastIn .3s ease;
+  }
+  .toast.out{opacity:0;transform:translateY(-8px);transition:all .35s}
+  @keyframes toastIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
+
+  #sbToggle{
+    display:none;position:absolute;top:14px;left:14px;z-index:1150;
+    width:42px;height:42px;border-radius:11px;border:1px solid var(--line);
+    background:rgba(16,20,29,.93);color:var(--txt);font-size:19px;cursor:pointer;
+    box-shadow:0 4px 14px rgba(0,0,0,.4);
+  }
+  #sbBackdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1090}
+
+  /* palette popover */
+  #palette{
+    position:fixed;z-index:2000;display:none;
+    background:#141a26;border:1px solid #2c3549;border-radius:12px;
+    padding:12px;box-shadow:0 14px 44px rgba(0,0,0,.65);
+    width:196px;
+  }
+  #palette.open{display:block;animation:fadeUp .18s ease}
+  #palette .pal-title{font-size:10.5px;color:var(--mut);font-weight:700;
+    text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  .swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}
+  .swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;
+    border:2px solid rgba(255,255,255,.25);transition:transform .12s}
+  .swatch:hover{transform:scale(1.22);border-color:#fff}
+
+  /* ---------- leaflet dark overrides ---------- */
+  .leaflet-control-zoom a{
+    background:#141a26 !important;color:#dbe2ef !important;
+    border-color:#2c3549 !important;
+  }
+  .leaflet-control-zoom a:hover{background:#1d2534 !important}
+  .leaflet-bar{border:1px solid #2c3549 !important;box-shadow:0 4px 14px rgba(0,0,0,.5) !important}
+  .leaflet-control-attribution{
+    background:rgba(13,17,25,.75) !important;color:#68718a !important;
+    font-size:10px !important;
+  }
+  .leaflet-control-attribution a{color:#8d96ab !important}
+  .leaflet-control-scale-line{
+    background:rgba(13,17,25,.7) !important;color:#cdd5e4 !important;
+    border-color:#4a5570 !important;
+  }
+  .leaflet-popup-content-wrapper{
+    background:#141a26;color:var(--txt);
+    border:1px solid #2c3549;border-radius:12px;
+    box-shadow:0 14px 40px rgba(0,0,0,.6);
+  }
+  .leaflet-popup-content{margin:14px 16px;font-family:'Manrope',sans-serif}
+  .leaflet-popup-tip{background:#141a26;border:1px solid #2c3549}
+  .leaflet-popup-close-button{color:#8d96ab !important;font-size:18px !important}
+  .leaflet-container a.leaflet-popup-close-button:hover{color:#ff8093 !important}
+
+  .leaflet-tooltip.st-label{
+    background:rgba(13,17,25,.88);color:#e9edf5;
+    border:1px solid #2c3549;border-radius:6px;
+    padding:2px 8px;font-size:11px;font-weight:600;
+    font-family:'Manrope',sans-serif;
+    box-shadow:0 3px 10px rgba(0,0,0,.45);
+  }
+  .leaflet-tooltip.st-label::before{display:none}
+
+  .pulse{animation:pulseA 1.1s ease-in-out infinite}
+  @keyframes pulseA{0%,100%{stroke-opacity:1}50%{stroke-opacity:.15}}
+
+  /* popup content */
+  .pop-name{font-family:'Russo One';font-size:15px;margin-bottom:6px}
+  .pop-lines{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
+  .pop-badge{font-size:10px;font-weight:700;color:#fff;padding:2px 9px;border-radius:12px}
+  .pop-coord{font-size:10.5px;color:var(--mut);margin-bottom:10px}
+  .pop-row{margin-bottom:8px}
+  .pop-btn{
+    border:none;border-radius:8px;padding:7px 13px;font-family:inherit;
+    font-size:12px;font-weight:700;cursor:pointer;transition:filter .15s;
+  }
+  .pop-btn:hover{filter:brightness(1.15)}
+  .pop-btn.primary{background:var(--accent);color:#fff}
+  .pop-btn.ghost{width:100%;background:#232c40;color:#cdd5e4}
+  .pop-btn.ghost.danger:hover{background:rgba(228,0,43,.25);color:#ff98a8}
+
+  @media (max-width:900px){
+    #sidebar{position:fixed;left:0;top:0;transform:translateX(-105%);
+      box-shadow:14px 0 40px rgba(0,0,0,.5)}
+    #sidebar.open{transform:translateX(0)}
+    #sbToggle{display:block}
+    #sbBackdrop.show{display:block}
+    #hint{font-size:11px;bottom:14px;padding:8px 14px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside id="sidebar">
+    <div class="sb-head">
+      <div class="logo">М</div>
+      <div>
+        <h1 class="display">МЕТРОСТРОЙ РФ</h1>
+        <p>Построй метро где угодно в России</p>
+      </div>
+    </div>
+
+    <div class="sb-scroll">
+
+      <div class="section">
+        <div class="sec-title">Инструменты</div>
+        <div class="tools">
+          <button class="tool-btn" data-tool="station" id="tb-station">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+            Станции
+          </button>
+          <button class="tool-btn" data-tool="transfer" id="tb-transfer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="12" r="3"/><path d="M9 12h6" stroke-dasharray="2 3"/></svg>
+            Переход
+          </button>
+          <button class="tool-btn" data-tool="pan" id="tb-pan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><circle cx="12" cy="12" r="2.5"/></svg>
+            Выбор
+          </button>
+          <button class="tool-btn" data-tool="delete" id="tb-delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14"/></svg>
+            Снос
+          </button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Линии <span id="lineCount"></span></div>
+        <div id="linesList"></div>
+        <button class="add-line" id="addLineBtn">＋ Новая линия</button>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Статистика сети</div>
+        <div class="stats">
+          <div class="stat"><b id="stLines">0</b><span>линий</span></div>
+          <div class="stat"><b id="stStations">0</b><span>станций</span></div>
+          <div class="stat"><b id="stTransfers">0</b><span>переходов</span></div>
+          <div class="stat"><b id="stLength">0</b><span>км путей</span></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Быстрый переход к городам</div>
+        <div class="chips" id="cityChips"></div>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Переход по координатам</div>
+        <div class="pop-row" style="margin-bottom:0">
+          <input id="coordsInput" placeholder="55.207505, 37.943823">
+          <button class="pop-btn primary" id="coordsBtn">→</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <label class="toggle-row">
+          Подписи станций
+          <span class="switch">
+            <input type="checkbox" id="labelsToggle" checked>
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+
+      <div class="section">
+        <div class="sec-title">Данные и сохранение</div>
+        <div class="actions">
+          <button class="act-btn save"   id="saveBtn">💾 Сохранить</button>
+          <button class="act-btn link"   id="linkBtn">🔗 Ссылка</button>
+          <button class="act-btn export" id="exportBtn">📥 В файл</button>
+          <button class="act-btn import" id="importBtn">📤 Из файла</button>
+          <button class="act-btn demo"   id="demoBtn">✨ Демо-сеть</button>
+          <button class="act-btn clear"  id="clearBtn">🗑 Очистить всё</button>
+        </div>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+        <div id="saveStatus">Автосохранение включено</div>
+      </div>
+
+    </div>
+  </aside>
+  <div id="sbBackdrop"></div>
+
+  <!-- ================= MAP ================= -->
+  <main id="mapWrap">
+    <button id="sbToggle">☰</button>
+    <div id="map"></div>
+    <div id="hint"></div>
+    <div id="toasts"></div>
+  </main>
+</div>
+
+<div id="palette">
+  <div class="pal-title">Цвет линии</div>
+  <div class="swatches" id="swatches"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+
+/* =========================================================
+   СОСТОЯНИЕ
+========================================================= */
+const KEY = 'metrostroy_rf_v1';
+const PALETTE = ['#e4002b','#2dbe2c','#0078be','#1ebcef','#8d5b2d','#f07e24',
+                 '#9b4f9b','#ffd800','#8e9ba8','#a3d826','#d63f8e','#00c389'];
+
+let state = { lines:[], stations:{}, segments:[], transfers:[], activeLineId:null };
+let tool = 'station';
+let transferPending = null;
+let labelsOn = true;
+let popupStationId = null;
+let paletteTarget = null;
+let lastMouse = null;
+let idSeq = 0;
+const uid = () => 'x' + Date.now().toString(36) + (++idSeq).toString(36) + Math.random().toString(36).slice(2,6);
+
+const CITIES = [
+  ['Москва', 55.7558, 37.6173, 11], ['Санкт-Петербург', 59.9343, 30.3351, 11],
+  ['Новосибирск', 55.0084, 82.9357, 11], ['Екатеринбург', 56.8389, 60.6057, 11],
+  ['Казань', 55.7963, 49.1088, 11], ['Нижний Новгород', 56.2965, 43.9361, 11],
+  ['Коломна', 55.0960, 38.7660, 13], ['Ефремов', 53.1467, 38.0922, 14],
+  ['Сочи', 43.6028, 39.7342, 12], ['Владивосток', 43.1155, 131.8854, 11]
+];
+
+const HINTS = {
+  station : '🚇 Кликайте по карте — станции соединяются автоматически. Клик по чужой станции = пересадка.',
+  transfer: '🔗 Кликните первую станцию, затем вторую — между ними появится переход.',
+  delete  : '🗑 Кликайте по станциям, участкам линий и переходам, чтобы их снести.',
+  pan     : '🖱 Кликните по станции — информация, переименование и удаление.'
+};
+
+/* =========================================================
+   КАРТА
+========================================================= */
+const map = L.map('map', { zoomControl:false, minZoom:2, worldCopyJump:true })
+              .setView([60, 78], 3);
+map.attributionControl.setPrefix(false);
+L.control.zoom({ position:'topright' }).addTo(map);
+L.control.scale({ imperial:false, position:'bottomleft' }).addTo(map);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+  subdomains:'abcd', maxZoom:19
+}).addTo(map);
+
+const gGlow  = L.layerGroup().addTo(map);
+const gSeg   = L.layerGroup().addTo(map);
+const gTrans = L.layerGroup().addTo(map);
+const gSt    = L.layerGroup().addTo(map);
+
+const preview = L.polyline([], { color:'#9aa4b2', weight:2, dashArray:'6 8', interactive:false }).addTo(map);
+
+/* =========================================================
+   УТИЛИТЫ
+========================================================= */
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                          .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const activeLine = () => state.lines.find(l => l.id === state.activeLineId) || null;
+const stationById = id => state.stations[id] || null;
+
+function distKm(a, b){
+  const R = 6371, toR = Math.PI/180;
+  const dLa = (b.lat - a.lat)*toR, dLo = (b.lng - a.lng)*toR;
+  const s = Math.sin(dLa/2)**2 +
+            Math.cos(a.lat*toR)*Math.cos(b.lat*toR)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+const fmtKm = km => km === 0 ? '0' : km < 10 ? km.toFixed(1) : Math.round(km).toString();
+
+function lineStats(lineId){
+  let cnt = 0, len = 0;
+  for (const st of Object.values(state.stations))
+    if (st.lineIds.includes(lineId)) cnt++;
+  for (const sg of state.segments)
+    if (sg.lineId === lineId){
+      const a = stationById(sg.a), b = stationById(sg.b);
+      if (a && b) len += distKm(a, b);
+    }
+  return { cnt, len };
+}
+const isTransfer = st =>
+  st.lineIds.length > 1 || state.transfers.some(t => t.a === st.id || t.b === st.id);
+
+function toast(msg){
+  const box = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 2600);
+}
+
+/* =========================================================
+   СОХРАНЕНИЕ / ЗАГРУЗКА
+========================================================= */
+function save(silent){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(state));
+    const el = document.getElementById('saveStatus');
+    if (el) el.textContent = '✓ Сохранено в ' + new Date().toLocaleTimeString('ru-RU');
+    if (!silent) {}
+  }catch(e){}
+}
+
+function applyState(s){
+  if (!s || !Array.isArray(s.lines) || typeof s.stations !== 'object' || s.stations === null)
+    return false;
+  state = {
+    lines: s.lines,
+    stations: s.stations,
+    segments: Array.isArray(s.segments) ? s.segments : [],
+    transfers: Array.isArray(s.transfers) ? s.transfers : [],
+    activeLineId: s.activeLineId || null
+  };
+  return true;
+}
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return false;
+    return applyState(JSON.parse(raw));
+  }catch(e){ return false; }
+}
+
+/* --- кодирование сети в ссылку --- */
+function encodeState(){
+  return btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+}
+function decodeState(str){
+  try{ return JSON.parse(decodeURIComponent(escape(atob(str)))); }
+  catch(e){ return null; }
+}
+function loadFromHash(){
+  const m = location.hash.match(/#n=([A-Za-z0-9+/=]+)/);
+  if (!m) return false;
+  const s = decodeState(m[1]);
+  if (s && applyState(s)){
+    try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}
+    return true;
+  }
+  return false;
+}
+
+function flyToNetwork(){
+  const pts = Object.values(state.stations).map(s => [s.lat, s.lng]);
+  if (pts.length) map.flyToBounds(L.latLngBounds(pts).pad(0.3), { duration:1.2 });
+}
+
+/* =========================================================
+   МУТАЦИИ
+========================================================= */
+function createLine(name, color){
+  const l = { id:uid(), name: name || ('Линия ' + (state.lines.length + 1)),
+              color: color || PALETTE[state.lines.length % PALETTE.length],
+              lastStationId:null };
+  state.lines.push(l);
+  return l;
+}
+
+function addStationAt(latlng){
+  const line = activeLine();
+  if (!line){ toast('Сначала создайте линию'); return; }
+  const id = uid();
+  const n = Object.keys(state.stations).length + 1;
+  state.stations[id] = { id, name:'Станция ' + n, lat:latlng.lat, lng:latlng.lng, lineIds:[line.id] };
+  if (line.lastStationId && stationById(line.lastStationId))
+    state.segments.push({ id:uid(), lineId:line.id, a:line.lastStationId, b:id });
+  line.lastStationId = id;
+}
+
+function joinLineToStation(stId){
+  const line = activeLine();
+  const st = stationById(stId);
+  if (!line || !st) return;
+  if (!st.lineIds.includes(line.id)){
+    st.lineIds.push(line.id);
+    line.lastStationId = stId;
+    toast('🔄 Пересадочный узел создан!');
+  } else {
+    line.lastStationId = stId;
+  }
+}
+
+function createTransfer(aId, bId){
+  if (aId === bId) return;
+  const dup = state.transfers.some(t =>
+    (t.a === aId && t.b === bId) || (t.a === bId && t.b === aId));
+  if (dup){ toast('Такой переход уже есть'); return; }
+  state.transfers.push({ id:uid(), a:aId, b:bId });
+  toast('🔗 Переход между станциями построен');
+}
+
+function deleteStation(id){
+  state.segments  = state.segments.filter(s => s.a !== id && s.b !== id);
+  state.transfers = state.transfers.filter(t => t.a !== id && t.b !== id);
+  for (const l of state.lines)
+    if (l.lastStationId === id) l.lastStationId = null;
+  delete state.stations[id];
+  if (transferPending === id) transferPending = null;
+}
+
+function deleteSegment(id){ state.segments = state.segments.filter(s => s.id !== id); }
+function deleteTransfer(id){ state.transfers = state.transfers.filter(t => t.id !== id); }
+
+function deleteLine(id){
+  if (!confirm('Удалить линию и все её участки? Общие станции останутся у других линий.')) return;
+  state.segments = state.segments.filter(s => s.lineId !== id);
+  for (const st of Object.values(state.stations))
+    st.lineIds = st.lineIds.filter(x => x !== id);
+  for (const stId of Object.keys(state.stations))
+    if (state.stations[stId].lineIds.length === 0 &&
+        !state.transfers.some(t => t.a === stId || t.b === stId))
+      deleteStation(stId);
+  state.lines = state.lines.filter(l => l.id !== id);
+  if (state.activeLineId === id)
+    state.activeLineId = state.lines.length ? state.lines[0].id : null;
+  update();
+}
+
+function clearAll(silent){
+  state = { lines:[], stations:{}, segments:[], transfers:[], activeLineId:null };
+  const l = createLine();
+  state.activeLineId = l.id;
+  if (!silent) toast('Площадка расчищена. Строим!');
+  update();
+}
+
+/* =========================================================
+   ДЕМО-СЕТЬ (Москва)
+========================================================= */
+function loadDemo(){
+  state = { lines:[], stations:{}, segments:[], transfers:[], activeLineId:null };
+  const defs = [
+    { name:'Столичная',   lat:55.7520, lng:37.5800 },
+    { name:'Заречье',     lat:55.7512, lng:37.6010 },
+    { name:'Кремлёвская', lat:55.7500, lng:37.6200 },
+    { name:'Парковая',    lat:55.7488, lng:37.6410 },
+    { name:'Восточная',   lat:55.7478, lng:37.6620 },
+    { name:'Северная',    lat:55.7660, lng:37.6160 },
+    { name:'Мостовая',    lat:55.7580, lng:37.6180 },
+    { name:'Озёрная',     lat:55.7420, lng:37.6225 },
+    { name:'Тихая',       lat:55.7340, lng:37.6250 },
+    { name:'Ясная',       lat:55.7640, lng:37.6480 },
+    { name:'Рассвет',     lat:55.7575, lng:37.6335 },
+    { name:'Южная',       lat:55.7400, lng:37.6460 }
+  ];
+  const routes = [
+    ['Столичная','Заречье','Кремлёвская','Парковая','Восточная'],
+    ['Северная','Мостовая','Кремлёвская','Озёрная','Тихая'],
+    ['Ясная','Рассвет','Парковая','Южная']
+  ];
+  const colors = ['#e4002b','#2dbe2c','#0078be'];
+  const names  = ['Линия 1','Линия 2','Линия 3'];
+  const nameToId = {};
+  routes.forEach((route, ri) => {
+    const line = createLine(names[ri], colors[ri]);
+    route.forEach((nm, i) => {
+      let sid = nameToId[nm];
+      if (!sid){
+        const d = defs.find(x => x.name === nm);
+        sid = uid();
+        state.stations[sid] = { id:sid, name:nm, lat:d.lat, lng:d.lng, lineIds:[line.id] };
+        nameToId[nm] = sid;
+      } else {
+        state.stations[sid].lineIds.push(line.id);
+      }
+      if (i > 0){
+        const prev = nameToId[route[i-1]];
+        state.segments.push({ id:uid(), lineId:line.id, a:prev, b:sid });
+      }
+      line.lastStationId = sid;
+    });
+  });
+  state.transfers.push({ id:uid(), a:nameToId['Мостовая'], b:nameToId['Рассвет'] });
+  state.activeLineId = state.lines[0].id;
+  map.flyTo([55.7505, 37.6200], 13, { duration:1.4 });
+  toast('✨ Демо-сеть загружена — изучайте и перестраивайте!');
+  update();
+}
+
+/* =========================================================
+   ОТРИСОВКА КАРТЫ
+========================================================= */
+function redraw(){
+  gGlow.clearLayers(); gSeg.clearLayers(); gTrans.clearLayers(); gSt.clearLayers();
+
+  for (const sg of state.segments){
+    const a = stationById(sg.a), b = stationById(sg.b);
+    if (!a || !b) continue;
+    const line = state.lines.find(l => l.id === sg.lineId);
+    const color = line ? line.color : '#888';
+    const latlngs = [[a.lat,a.lng],[b.lat,b.lng]];
+    gGlow.addLayer(L.polyline(latlngs, { color, weight:11, opacity:.22, interactive:false }));
+    const main = L.polyline(latlngs, { color, weight:4.5, opacity:.95,
+      lineCap:'round', lineJoin:'round' });
+    main.on('click', e => {
+      if (tool === 'delete'){
+        L.DomEvent.stopPropagation(e.originalEvent);
+        deleteSegment(sg.id); update();
+      }
+    });
+    gSeg.addLayer(main);
+  }
+
+  for (const t of state.transfers){
+    const a = stationById(t.a), b = stationById(t.b);
+    if (!a || !b) continue;
+    const latlngs = [[a.lat,a.lng],[b.lat,b.lng]];
+    gTrans.addLayer(L.polyline(latlngs, { color:'#0c0f14', weight:7, opacity:.9, interactive:false }));
+    const dash = L.polyline(latlngs, { color:'#ffffff', weight:2.5, dashArray:'7 7',
+      bubblingMouseEvents:false });
+    dash.on('click', e => {
+      L.DomEvent.stopPropagation(e.originalEvent);
+      if (tool === 'delete'){ deleteTransfer(t.id); update(); }
+    });
+    gTrans.addLayer(dash);
+  }
+
+  for (const st of Object.values(state.stations)){
+    const ll = [st.lat, st.lng];
+    const tr = isTransfer(st);
+    if (transferPending === st.id){
+      gSt.addLayer(L.circleMarker(ll, { radius:15, color:'#ffd800', weight:3,
+        fill:false, interactive:false, className:'pulse' }));
+    }
+    const firstLine = state.lines.find(l => st.lineIds.includes(l.id));
+    const m = L.circleMarker(ll, {
+      radius: tr ? 8.5 : 6, weight:3,
+      color: tr ? '#0c0f14' : (firstLine ? firstLine.color : '#888'),
+      fillColor:'#ffffff', fillOpacity:1,
+      bubblingMouseEvents:false
+    });
+    m.on('click', e => {
+      L.DomEvent.stopPropagation(e.originalEvent);
+      onStationClick(st.id);
+    });
+    m.bindTooltip(esc(st.name), labelsOn
+      ? { permanent:true, direction:'top', offset:[0,-11], className:'st-label' }
+      : { direction:'top', offset:[0,-11], className:'st-label' });
+    gSt.addLayer(m);
+  }
+}
+
+/* =========================================================
+   ВЗАИМОДЕЙСТВИЕ НА КАРТЕ
+========================================================= */
+function onStationClick(id){
+  const st = stationById(id);
+  if (!st) return;
+  if (tool === 'delete'){ deleteStation(id); update(); toast('Станция снесена'); return; }
+  if (tool === 'transfer'){
+    if (transferPending === id){ transferPending = null; update(); return; }
+    if (!transferPending){
+      transferPending = id; toast('Теперь выберите вторую станцию'); update(); return;
+    }
+    createTransfer(transferPending, id);
+    transferPending = null; update(); return;
+  }
+  if (tool === 'station'){
+    const line = activeLine();
+    if (!line){ toast('Сначала создайте линию'); return; }
+    joinLineToStation(id); update(); return;
+  }
+  openStationPopup(id);
+}
+
+function openStationPopup(id){
+  const st = stationById(id);
+  if (!st) return;
+  popupStationId = id;
+  const badges = st.lineIds.map(lid => {
+    const l = state.lines.find(x => x.id === lid);
+    return l ? `<span class="pop-badge" style="background:${l.color}">${esc(l.name)}</span>` : '';
+  }).join('') + (state.transfers.some(t => t.a === id || t.b === id)
+      ? '<span class="pop-badge" style="background:#3a4560">переход ↹</span>' : '');
+  const html = `
+    <div class="pop-name">${esc(st.name)}</div>
+    <div class="pop-lines">${badges}</div>
+    <div class="pop-coord">📍 ${st.lat.toFixed(4)}, ${st.lng.toFixed(4)}</div>
+    <div class="pop-row">
+      <input id="popNameInput" value="${esc(st.name)}" maxlength="40" placeholder="Название станции">
+      <button class="pop-btn primary" id="popRenameBtn">OK</button>
+    </div>
+    <button class="pop-btn ghost danger" id="popDelBtn">🗑 Удалить станцию</button>`;
+  L.popup({ closeButton:true }).setLatLng([st.lat, st.lng]).setContent(html).openOn(map);
+}
+
+map.on('popupopen', e => {
+  const id = popupStationId;
+  if (!id) return;
+  const root = e.popup.getElement();
+  if (!root) return;
+  const inp = root.querySelector('#popNameInput');
+  const btnR = root.querySelector('#popRenameBtn');
+  const btnD = root.querySelector('#popDelBtn');
+  const doRename = () => {
+    const st = stationById(id);
+    if (!st) return;
+    const v = inp.value.trim();
+    if (v){ st.name = v; toast('Станция переименована'); }
+    map.closePopup(); update();
+  };
+  if (btnR) btnR.addEventListener('click', doRename);
+  if (inp) inp.addEventListener('keydown', ev => { if (ev.key === 'Enter') doRename(); });
+  if (btnD) btnD.addEventListener('click', () => {
+    map.closePopup(); deleteStation(id); update(); toast('Станция снесена');
+  });
+});
+
+map.on('click', e => {
+  if (tool === 'station'){
+    if (!activeLine()){ toast('Сначала создайте линию'); return; }
+    addStationAt(e.latlng); update();
+  } else if (tool === 'transfer' && transferPending){
+    transferPending = null; update();
+  }
+});
+
+map.on('mousemove', e => { lastMouse = e.latlng; updatePreview(); });
+
+function updatePreview(){
+  const line = activeLine();
+  if (tool === 'station' && line && line.lastStationId && lastMouse){
+    const last = stationById(line.lastStationId);
+    if (last){ preview.setLatLngs([[last.lat,last.lng],[lastMouse.lat,lastMouse.lng]]); return; }
+  }
+  preview.setLatLngs([]);
+}
+
+/* ---------- инструменты ---------- */
+function setTool(t){
+  tool = t;
+  transferPending = null;
+  document.querySelectorAll('.tool-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.tool === t));
+  document.getElementById('map').classList.toggle('build-cursor', t === 'station');
+  document.getElementById('hint').textContent = HINTS[t];
+  updatePreview();
+  redraw();
+}
+document.querySelectorAll('.tool-btn').forEach(b =>
+  b.addEventListener('click', () => setTool(b.dataset.tool)));
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){
+    transferPending = null;
+    closePalette();
+    redraw();
+  }
+});
+
+/* =========================================================
+   САЙДБАР
+========================================================= */
+function renderLineList(){
+  const box = document.getElementById('linesList');
+  document.getElementById('lineCount').textContent = state.lines.length ? state.lines.length + ' шт.' : '';
+  if (!state.lines.length){
+    box.innerHTML = '<div style="font-size:12px;color:var(--mut);padding:6px 2px">Линий пока нет — создайте первую!</div>';
+    return;
+  }
+  box.innerHTML = state.lines.map(l => {
+    const s = lineStats(l.id);
+    const activeCls = l.id === state.activeLineId ? ' active' : '';
+    return `
+    <div class="line-row${activeCls}" data-id="${l.id}">
+      <span class="line-dot" data-act="color" style="background:${l.color};color:${l.color}" title="Сменить цвет"></span>
+      <div class="line-info">
+        <input class="line-name" data-act="name" value="${esc(l.name)}" maxlength="30">
+        <div class="line-meta">${s.cnt} станц. · ${fmtKm(s.len)} км</div>
+      </div>
+      <button class="mini-btn" data-act="fit" title="Показать линию">⤢</button>
+      <button class="mini-btn danger" data-act="del" title="Удалить линию">✕</button>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('linesList').addEventListener('click', e => {
+  const row = e.target.closest('.line-row');
+  if (!row) return;
+  const id = row.dataset.id;
+  const act = e.target.dataset.act;
+  if (act === 'color'){ openPalette(id, e.target); return; }
+  if (act === 'fit'){ fitLine(id); return; }
+  if (act === 'del'){ deleteLine(id); return; }
+  if (!act || e.target.classList.contains('line-row')){
+    state.activeLineId = id; save(true); renderLineList();
+  }
+});
+document.getElementById('linesList').addEventListener('change', e => {
+  if (e.target.dataset.act === 'name'){
+    const row = e.target.closest('.line-row');
+    const l = state.lines.find(x => x.id === row.dataset.id);
+    if (l){ l.name = e.target.value.trim() || l.name; save(true); redraw(); }
+  }
+});
+
+function fitLine(id){
+  const pts = Object.values(state.stations)
+    .filter(s => s.lineIds.includes(id)).map(s => [s.lat, s.lng]);
+  if (!pts.length){ toast('На линии пока нет станций'); return; }
+  map.flyToBounds(L.latLngBounds(pts).pad(0.35), { duration:.9 });
+}
+
+document.getElementById('addLineBtn').addEventListener('click', () => {
+  const l = createLine();
+  state.activeLineId = l.id;
+  setTool('station');
+  update();
+  toast('Линия «' + l.name + '» готова к строительству');
+});
+
+/* ---------- палитра ---------- */
+const palEl = document.getElementById('palette');
+document.getElementById('swatches').innerHTML = PALETTE.map(c =>
+  `<span class="swatch" data-color="${c}" style="background:${c}"></span>`).join('');
+
+function openPalette(lineId, anchor){
+  paletteTarget = lineId;
+  palEl.classList.add('open');
+  const r = anchor.getBoundingClientRect();
+  let x = Math.min(r.right + 8, window.innerWidth - 210);
+  let y = Math.min(r.top - 20, window.innerHeight - 150);
+  palEl.style.left = Math.max(8, x) + 'px';
+  palEl.style.top  = Math.max(8, y) + 'px';
+}
+function closePalette(){ palEl.classList.remove('open'); paletteTarget = null; }
+document.getElementById('swatches').addEventListener('click', e => {
+  const c = e.target.dataset.color;
+  if (!c || !paletteTarget) return;
+  const l = state.lines.find(x => x.id === paletteTarget);
+  if (l){ l.color = c; toast('Цвет линии обновлён'); }
+  closePalette(); update();
+});
+document.addEventListener('click', e => {
+  if (palEl.classList.contains('open') &&
+      !palEl.contains(e.target) && !e.target.classList.contains('line-dot'))
+    closePalette();
+});
+
+/* ---------- статистика ---------- */
+function renderStats(){
+  let totalKm = 0;
+  for (const sg of state.segments){
+    const a = stationById(sg.a), b = stationById(sg.b);
+    if (a && b) totalKm += distKm(a, b);
+  }
+  document.getElementById('stLines').textContent = state.lines.length;
+  document.getElementById('stStations').textContent = Object.keys(state.stations).length;
+  document.getElementById('stTransfers').textContent =
+    Object.values(state.stations).filter(isTransfer).length;
+  document.getElementById('stLength').textContent = fmtKm(totalKm);
+}
+
+/* ---------- города и координаты ---------- */
+document.getElementById('cityChips').innerHTML = CITIES.map((c, i) =>
+  `<button class="chip" data-i="${i}">${c[0]}</button>`).join('');
+document.getElementById('cityChips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  const c = CITIES[+b.dataset.i];
+  map.flyTo([c[1], c[2]], c[3], { duration:1.3 });
+  toast('📍 ' + c[0] + ': стройте метро здесь!');
+});
+
+function gotoCoords(raw){
+  const m = raw.match(/(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)/);
+  if (!m){ toast('Формат: широта, долгота — например 55.207505, 37.943823'); return; }
+  map.flyTo([+m[1], +m[2]], 14, { duration:1.2 });
+  toast('📍 Точка ' + m[1] + ', ' + m[2]);
+}
+document.getElementById('coordsBtn').addEventListener('click', () =>
+  gotoCoords(document.getElementById('coordsInput').value));
+document.getElementById('coordsInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') gotoCoords(e.target.value);
+});
+
+/* =========================================================
+   СОХРАНЕНИЕ: КНОПКИ
+========================================================= */
+/* 💾 Сохранить в браузере */
+document.getElementById('saveBtn').addEventListener('click', () => {
+  save(true);
+  toast('💾 Проект сохранён в браузере');
+});
+
+/* 🔗 Ссылка для обмена */
+document.getElementById('linkBtn').addEventListener('click', () => {
+  const base = (location.protocol === 'file:' || location.origin === 'null')
+    ? location.href.split('#')[0]
+    : location.origin + location.pathname;
+  const url = base + '#n=' + encodeState();
+  const done = () => toast('🔗 Ссылка скопирована — сеть откроется у любого, кому её отправили');
+  const fallback = () => { prompt('Скопируйте ссылку вручную:', url); };
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(url).then(done).catch(fallback);
+  else fallback();
+});
+
+/* 📥 Экспорт в файл */
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'metro-proekt-' + new Date().toISOString().slice(0,16).replace(/[:T]/g,'-') + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  toast('📥 Проект сохранён в файл');
+});
+
+/* 📤 Импорт из файла */
+document.getElementById('importBtn').addEventListener('click', () =>
+  document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{
+      const s = JSON.parse(r.result);
+      if (applyState(s)){
+        if (!state.activeLineId && state.lines.length)
+          state.activeLineId = state.lines[0].id;
+        update();
+        flyToNetwork();
+        toast('📤 Проект «' + f.name + '» загружен');
+      } else {
+        toast('⚠ Файл не похож на проект МетроСтроя');
+      }
+    }catch(err){ toast('⚠ Не удалось прочитать файл'); }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+});
+
+/* демо / очистка */
+document.getElementById('demoBtn').addEventListener('click', loadDemo);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (confirm('Удалить всю сеть — все линии, станции и переходы?')) clearAll();
+});
+
+/* ---------- переключатель подписей ---------- */
+document.getElementById('labelsToggle').addEventListener('change', e => {
+  labelsOn = e.target.checked; redraw();
+});
+
+/* ---------- мобильный сайдбар ---------- */
+const sidebar = document.getElementById('sidebar');
+const backdrop = document.getElementById('sbBackdrop');
+document.getElementById('sbToggle').addEventListener('click', () => {
+  sidebar.classList.toggle('open');
+  backdrop.classList.toggle('show', sidebar.classList.contains('open'));
+});
+backdrop.addEventListener('click', () => {
+  sidebar.classList.remove('open'); backdrop.classList.remove('show');
+});
+
+/* =========================================================
+   ГЛАВНЫЙ ЦИКЛ ОБНОВЛЕНИЯ + СТАРТ
+========================================================= */
+function update(){
+  save(true);          // автосохранение при каждом изменении
+  redraw();
+  renderLineList();
+  renderStats();
+  updatePreview();
+}
+
+const fromHash = loadFromHash();
+if (fromHash){
+  toast('🔗 Сеть загружена по ссылке');
+} else if (!loadLocal()){
+  const l = createLine();
+  state.activeLineId = l.id;
+}
+if (!state.activeLineId && state.lines.length)
+  state.activeLineId = state.lines[0].id;
+
+setTool('station');
+update();
+if (fromHash && Object.keys(state.stations).length) flyToNetwork();
+map.whenReady(() => setTimeout(() => map.invalidateSize(), 100));
+</script>
+</body>
+</html>
